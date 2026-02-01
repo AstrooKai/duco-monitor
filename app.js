@@ -105,6 +105,27 @@ thousands = function (x) {
   return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
+// Animate numeric values from start to end and update jQuery element
+countUp = function ($el, start, end, decimals = 4, duration = 1000) {
+  try {
+    const startTime = performance.now();
+    const change = end - start;
+
+    function tick(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const value = start + change * progress;
+      $el.html(`<span title="${end}">${DUCO} ${value.toFixed(decimals)}</span>`);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  } catch (e) {
+    // fallback: immediate set
+    $el.html(`<span title="${end}">${DUCO} ${end.toFixed(decimals)}</span>`);
+  }
+};
+
 dateYmdHis = function (date = new Date()) {
   return `${date.getFullYear()}-${addZero(date.getMonth() + 1)}-${addZero(
     date.getDate()
@@ -297,13 +318,11 @@ setUserData = function (data) {
   let info = "";
 
   if (data.result?.balance?.verified == "yes") {
-    info +=
-      '<i class="bx bxs-badge-check text-primary me-1"></i> Verified <br/>';
+    info += '<i class="bx bxs-badge-check text-primary me-1"></i> Verified';
   } else {
-    info += '<i class="bx bxs-badge text-warning me-1"></i> Not verified <br/>';
+    info += '<i class="bx bxs-badge text-warning me-1"></i> Not verified';
   }
-
-  info += `<i class="bx bxs-award text-primary me-1"></i> ${data.result?.balance?.trust_score} Trust Score<br/>`;
+  info += ` <span class="mx-2 text-muted">&middot;</span> <i class="bx bxs-award text-primary me-1"></i> ${data.result?.balance?.trust_score} Trust Score`;
   accountInfo.html(info);
 
   balance = data.result?.balance?.balance ?? 0;
@@ -366,9 +385,11 @@ setBalanceHistory = function (balance) {
   }
 
   if (ducoTotalMined.length > 0) {
-    ducoTotalMined.html(
-      `<span title="${minedTotal}">${DUCO} ${minedTotal.toFixed(4)}</span>`
-    );
+    // parse previous value shown (if any)
+    const prevText = ducoTotalMined.text() || "";
+    const prevVal = parseFloat(prevText.replace(/[^0-9.\-]/g, "")) || 0;
+    // animate from previous to new mined total
+    countUp(ducoTotalMined, prevVal, minedTotal, 4, 900);
   }
 
   if (Object.keys(history).length > 1) {
@@ -578,8 +599,9 @@ setUserAchievements = function (data) {
   const achievements = $("#achievements");
 
   achievements.html(`
-  <i class="bx bxs-trophy text-primary me-1"></i> ${data.length} Achievements<br/>
-  <a href="#" data-bs-toggle="modal" data-bs-target="#modalAchievements">See here</a>
+    <a href="#" data-bs-toggle="modal" data-bs-target="#modalAchievements" class="text-decoration-none text-reset">
+      <i class="bx bxs-trophy text-primary me-1"></i> ${data.length} Achievements
+    </a>
   `);
 
   for (i in data) {
@@ -900,9 +922,17 @@ updateIncomeChart = function (series = [], categories = []) {
   const incomeAvg = $("#income-avg");
 
   if (series.length > 0) {
-    incomeMax.text(Math.max(...series).toFixed(8));
-    incomeMin.text(Math.min(...series).toFixed(8));
-    incomeAvg.text((series.reduce((x, y) => x + y) / series.length).toFixed(8));
+    const newMax = Math.max(...series);
+    const newMin = Math.min(...series);
+    const newAvg = series.reduce((x, y) => x + y) / series.length;
+
+    const prevMax = parseFloat(incomeMax.text().replace(/[^0-9.\-]/g, "")) || 0;
+    const prevMin = parseFloat(incomeMin.text().replace(/[^0-9.\-]/g, "")) || 0;
+    const prevAvg = parseFloat(incomeAvg.text().replace(/[^0-9.\-]/g, "")) || 0;
+
+    countUp(incomeMax, prevMax, newMax, 8, 900);
+    countUp(incomeMin, prevMin, newMin, 8, 900);
+    countUp(incomeAvg, prevAvg, newAvg, 8, 900);
   }
 
   series = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...series];
