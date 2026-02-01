@@ -2,6 +2,8 @@ const DUCO = "ᕲ";
 const DUCO_USERNAME = "duco_username";
 const DUCO_REST_API = "https://server.duinocoin.com";
 const BALANCE_HISTORY = "balance_history";
+const MINED_BASELINE = "mined_baseline";
+const MINED_TOTAL = "mined_total";
 const PRICE_USD_HISTORY = "price_usd_history";
 const REFRESH_INTERVAL = "refresh_interval";
 const DEFAULT_THEME = "default_theme";
@@ -328,33 +330,53 @@ setBalance = function (balance) {
 
 setBalanceHistory = function (balance) {
   const duco24hProfit = $("#duco-24h-profit");
+  const ducoTotalMined = $("#duco-total-mined");
 
   let history = localStorage.getItem(`${username}_${BALANCE_HISTORY}`);
+  history = history == undefined ? {} : JSON.parse(history);
 
-  if (history == undefined) {
-    history = {};
-  } else {
-    history = JSON.parse(history);
+  const baselineKey = `${username}_${MINED_BASELINE}`;
+  const totalKey = `${username}_${MINED_TOTAL}`;
+
+  if (localStorage.getItem(baselineKey) == null) {
+    localStorage.setItem(baselineKey, String(balance));
+    localStorage.setItem(totalKey, "0");
   }
 
-  const lastBalance = Object.values(history).pop() ?? 0;
+  let minedTotal = parseFloat(localStorage.getItem(totalKey) ?? "0");
+  if (!Number.isFinite(minedTotal)) minedTotal = 0;
 
-  if (balance > lastBalance) {
-    const key = new Date().getTime();
+  const prevBalance = Object.values(history).pop();
+  const hasPrev = typeof prevBalance === "number";
 
-    history[key] = balance;
+  if (!hasPrev || balance !== prevBalance) {
+    history[Date.now()] = balance;
     localStorage.setItem(
       `${username}_${BALANCE_HISTORY}`,
       JSON.stringify(history)
     );
   }
 
+  if (hasPrev) {
+    const delta = balance - prevBalance;
+    if (delta > 0) {
+      minedTotal += delta;
+      localStorage.setItem(totalKey, String(minedTotal));
+    }
+  }
+
+  if (ducoTotalMined.length > 0) {
+    ducoTotalMined.html(
+      `<span title="${minedTotal}">${DUCO} ${minedTotal.toFixed(4)}</span>`
+    );
+  }
+
   if (Object.keys(history).length > 1) {
-    const last1_key = Object.keys(history)[Object.keys(history).length - 1];
+    const keys = Object.keys(history);
+    const last1_key = keys[keys.length - 1];
     const last1_val = history[last1_key];
 
-    const last2_key =
-      Object.keys(history)[Math.max(0, Object.keys(history).length - 360)];
+    const last2_key = keys[Math.max(0, keys.length - 360)];
     const last2_val = history[last2_key];
 
     let balanceChangeTime = last1_key - last2_key;
@@ -377,12 +399,9 @@ setBalanceHistory = function (balance) {
     if (_index > 1) {
       const bal = history[_key];
       const last_bal = history[_lastKey];
-      _incomeSeriesData[_incomeSeriesData.length] = bal - last_bal;
-      _incomeSeriesCategories[_incomeSeriesCategories.length] = dateHis(
-        new Date(+_key)
-      );
+      _incomeSeriesData.push(bal - last_bal);
+      _incomeSeriesCategories.push(dateHis(new Date(+_key)));
     }
-
     _index++;
     _lastKey = _key;
   }
