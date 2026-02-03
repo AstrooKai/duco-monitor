@@ -327,6 +327,9 @@ setUserData = function (data) {
 
   balance = data.result?.balance?.balance ?? 0;
   setBalance(balance);
+
+  // Make latest transactions available globally for setBalanceHistory
+  window.latestUserData = data.result;
   setBalanceHistory(balance);
   setMiners(data.result?.miners ?? []);
   setLastTransactions(data?.result?.transactions ?? []);
@@ -347,6 +350,7 @@ setBalance = function (balance) {
   );
 };
 
+
 setBalanceHistory = function (balance) {
   const duco24hProfit = $("#duco-24h-profit");
   const ducoTotalMined = $("#duco-total-mined");
@@ -356,10 +360,14 @@ setBalanceHistory = function (balance) {
 
   const baselineKey = `${username}_${MINED_BASELINE}`;
   const totalKey = `${username}_${MINED_TOTAL}`;
+  const txKey = `${username}_last_tx_id`;
+  const txDeductKey = `${username}_tx_deducted`;
 
   if (localStorage.getItem(baselineKey) == null) {
     localStorage.setItem(baselineKey, String(balance));
     localStorage.setItem(totalKey, "0");
+    localStorage.setItem(txKey, "0");
+    localStorage.setItem(txDeductKey, "0");
   }
 
   let minedTotal = parseFloat(localStorage.getItem(totalKey) ?? "0");
@@ -384,12 +392,41 @@ setBalanceHistory = function (balance) {
     }
   }
 
+  // Deduct new incoming transactions from minedTotal
+  let lastTxId = parseInt(localStorage.getItem(txKey) ?? "0");
+  let txDeducted = parseFloat(localStorage.getItem(txDeductKey) ?? "0");
+  let newTxDeduct = 0;
+  let maxTxId = lastTxId;
+
+  // Find the latest user data (setUserData is the only place this is called)
+  // so we can access the latest transactions from the global context
+  if (window.latestUserData && Array.isArray(window.latestUserData.transactions)) {
+    const txs = window.latestUserData.transactions;
+    for (let i = 0; i < txs.length; ++i) {
+      const tx = txs[i];
+      if (tx.id > lastTxId && tx.recipient === username && tx.sender !== username) {
+        newTxDeduct += parseFloat(tx.amount);
+      }
+      if (tx.id > maxTxId) maxTxId = tx.id;
+    }
+    if (newTxDeduct > 0) {
+      txDeducted += newTxDeduct;
+      localStorage.setItem(txDeductKey, String(txDeducted));
+    }
+    if (maxTxId > lastTxId) {
+      localStorage.setItem(txKey, String(maxTxId));
+    }
+  }
+
+  let minedPure = minedTotal - txDeducted;
+  if (minedPure < 0) minedPure = 0;
+
   if (ducoTotalMined.length > 0) {
     // parse previous value shown (if any)
     const prevText = ducoTotalMined.text() || "";
     const prevVal = parseFloat(prevText.replace(/[^0-9.\-]/g, "")) || 0;
     // animate from previous to new mined total
-    countUp(ducoTotalMined, prevVal, minedTotal, 4, 900);
+    countUp(ducoTotalMined, prevVal, minedPure, 4, 900);
   }
 
   if (Object.keys(history).length > 1) {
